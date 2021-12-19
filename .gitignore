@@ -1,0 +1,19 @@
+# env files
+.env
+
+# ssl files
+ssl/
+tls-gen/
+
+# volumes by docker for testing
+volumes/
+
+# container signing tool ignore cosign
+cosign/
+
+# gorm sample database
+data/
+gorm.db
+
+# local development md file
+local-development.md
