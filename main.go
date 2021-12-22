@@ -13,6 +13,19 @@
 *	6. Return response;
 */
 package main
+
+// @title Alya API Post Service
+// @version 1.0
+// @description This is a sample server Post Service.
+
+// @contact.name API Support
+// @contact.url http://www.swagger.io/support
+// @contact.email support@swagger.io
+
+// @license.name MIT
+// @license.url https://opensource.org/licenses/MIT
+
+// @host localhost:9090
 // @BasePath /v1
 
 
@@ -28,7 +41,7 @@ import (
 	// third party packages
 	"github.com/joho/godotenv"
 	osstatus "github.com/fukata/golang-stats-api-handler"
-	docs "git.yazgan.xyz/alperreha/alya-go-fn-boilerplate/docs"
+	"git.yazgan.xyz/alperreha/alya-go-fn-boilerplate/docs"
 	swaggerfiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 
@@ -175,7 +188,7 @@ func main() {
 	// init nats connection
 	nc, err = InitNatsConnection()
 	if err != nil {
-		log.Fatal(err)
+		log.Println("error connecting to nats server", err)
 	}
 
 
@@ -245,6 +258,7 @@ func main() {
 	store := persistence.NewInMemoryStore(time.Second)
 
 	docs.SwaggerInfo.BasePath = "/v1"
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
 	version := r.Group("/v1")
 	{
 		service := version.Group("/post")
@@ -262,9 +276,6 @@ func main() {
 			status := service.Group("/_") 
 			{
 				// if mode is production disable swagger
-				if os.Getenv("APP_ENV") != "production" {
-					status.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
-				}
 
 				status.GET("/app_kernel_stats", gin.BasicAuth(gin.Accounts{ statUsername : statPassword }) ,func (ctx *gin.Context) {
 					ctx.JSON(http.StatusOK, osstatus.GetStats())
@@ -276,10 +287,9 @@ func main() {
 				status.GET("/health", AppHealthCheckHandler)
 				status.GET("/cache_health", cache.CachePage(store, time.Minute,AppHealthCheckHandler))
 			}
-		}
-
-			
+		}			
 	}
+
 
 
 	// get app port
@@ -302,8 +312,8 @@ func main() {
 // @Accept */*
 // @Produce json
 // @Success 200 {object} object
-// @Router /v1/post/_/health [get]
-// @Router /v1/post/_/cache_health [get]
+// @Router /post/_/health [get]
+// @Router /post/_/cache_health [get]
 func AppHealthCheckHandler(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{
 		"status": true,
@@ -374,7 +384,7 @@ func CreatePostDtoValidator(ctx *gin.Context) (CreatePostDto,error) {
 // @Success 200 {object} object
 // @Failure 400 {object} object
 // @Failure 422 {object} object
-// @Router /v1/post/ [post]
+// @Router /post/ [post]
 func CreatePostHandler(ctx *gin.Context) {
 	// validate request
 	createPostDto,err := CreatePostDtoValidator(ctx)
