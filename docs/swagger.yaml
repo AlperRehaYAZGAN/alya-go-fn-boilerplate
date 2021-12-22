@@ -1,0 +1,51 @@
+basePath: /v1
+info:
+  contact: {}
+paths:
+  /v1/post/_/cache_health:
+    get:
+      consumes:
+      - application/json
+      description: Checks if app is running and returns container info
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            type: object
+      summary: Creates post by given CreatePostDto
+      tags:
+      - post-service
+  /v1/post/_/health:
+    get:
+      consumes:
+      - application/json
+      description: Checks if app is running and returns container info
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            type: object
+      summary: Creates post by given CreatePostDto
+      tags:
+      - post-service
+swagger: "2.0"

@@ -13,6 +13,7 @@
 *	6. Return response;
 */
 package main
+// @BasePath /v1
 
 
 import (
@@ -27,6 +28,9 @@ import (
 	// third party packages
 	"github.com/joho/godotenv"
 	osstatus "github.com/fukata/golang-stats-api-handler"
+	docs "git.yazgan.xyz/alya-go-fn-boilerplate/docs"
+	swaggerfiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 
 	// web server packages
     "github.com/gin-gonic/gin"
@@ -35,6 +39,8 @@ import (
 	"github.com/gin-contrib/cache/persistence"
 	// security headers
 	"github.com/gin-contrib/secure"
+	// rbac middleware
+	"github.com/zpatrick/rbac"
 	// validator packages
 	"github.com/go-playground/validator/v10"
 	// database packages
@@ -46,6 +52,43 @@ import (
 	"github.com/nats-io/nats.go"
 
 )
+
+
+/**
+*	App RBAC Definitions
+*/
+var APP_ROLES = []rbac.Role{
+	{
+			RoleID: "Admin",
+			Permissions: []rbac.Permission{
+					rbac.NewGlobPermission("post", "*"),
+			},
+	},
+	{
+			RoleID: "User",
+			Permissions: []rbac.Permission{
+				rbac.NewGlobPermission("post", "read"),
+				rbac.NewGlobPermission("post", "create"),
+				rbac.NewGlobPermission("post", "delete"),
+			},
+	},
+	{
+			RoleID: "Guest",
+			Permissions: []rbac.Permission{
+				rbac.NewGlobPermission("post", "read"),
+			},
+	},
+}
+
+/*
+for _, role := range roles {
+	fmt.Println("Role:", role.RoleID)
+	for _, rating := range []string{"g", "pg-13", "r"} {
+			canWatch, _ := role.Can("watch", rating)
+			fmt.Printf("Can watch %s? %t\n", rating, canWatch)
+	}
+}
+*/
 
 /**
 *	ConnectNats : Connect to Nats
@@ -194,22 +237,65 @@ func main() {
 		}
 	}
 
-	r.GET("/app_kernel_stats", gin.BasicAuth(gin.Accounts{ statUsername : statPassword }) ,func (ctx *gin.Context) {
-		ctx.JSON(http.StatusOK, osstatus.GetStats())
-	})
 
 	/**
-	*	Caching Example (Docs: https://github.com/gin-contrib/cache)
+	*	ALL APP ENDPOINTS
 	*/
+	// create memory store for caching (Look to /cache_health)
 	store := persistence.NewInMemoryStore(time.Second)
-    r.GET("/health", AppHealthCheckHandler)
-    r.GET("/cache_health", cache.CachePage(store, time.Minute,AppHealthCheckHandler))
 
-	/**
-	*	--------------- APP ROUTES ---------------
-	*/
-    r.GET("/post", GetPostHandler)
-    r.POST("/post", CreatePostHandler)
+	version := r.Group("/v1")
+	{
+		service := version.Group("/post")
+		{
+			/**
+			*	--------------- APP ROUTES ---------------
+			*/
+			service.GET("/", GetPostHandler)
+			service.POST("/", CreatePostHandler)
+			service.GET("/:id", GetPostByIdHandler)
+
+			/**
+			*	--------------- HEALTH ROUTES ---------------
+			*/
+			status := version.Group("/_") 
+			{
+				// if mode is production disable swagger
+				if os.Getenv("APP_ENV") != "production" {
+					status.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler,
+						swaggerfiles.SwaggerInfo.Title = "Post Microservice API"
+						swaggerfiles.SwaggerInfo.Description = "This is a Post Microservice API"
+						swaggerfiles.SwaggerInfo.Version = appVersion
+						swaggerfiles.SwaggerInfo.BasePath = "/v1"
+						// bearer auth
+						swaggerfiles.SecurityDefinitions["Bearer"] = &swaggerfiles.SecurityDefinition{
+							Type: "apiKey",
+							Name: "Authorization",
+							In: "header",
+						}
+						swaggerfiles.SecuritySchemes["Bearer"] = &swaggerfiles.SecurityScheme{
+							Type: "apiKey",
+							In: "header",
+							Name: "Authorization",
+						}
+						))
+				}
+
+				status.GET("/app_kernel_stats", gin.BasicAuth(gin.Accounts{ statUsername : statPassword }) ,func (ctx *gin.Context) {
+					ctx.JSON(http.StatusOK, osstatus.GetStats())
+				})
+
+				/**
+				*	Caching Example (Docs: https://github.com/gin-contrib/cache)
+				*/
+				service.GET("/health", AppHealthCheckHandler)
+				service.GET("/cache_health", cache.CachePage(store, time.Minute,AppHealthCheckHandler))
+			}
+		}
+
+			
+	}
+
 
 	// get app port
 	APP_PORT := os.Getenv("APP_PORT")
@@ -222,9 +308,17 @@ func main() {
 	}
 }
 
-/**
-*	AppHealthCheck : Health Check for Application
-*/
+
+// AppHealtCheckHandler is a simple health check endpoint
+// @Summary App Healt Check
+// @Schemes 
+// @Description Checks if app is running and returns container info
+// @Tags post-service
+// @Accept */*
+// @Produce json
+// @Success 200 {object} object
+// @Router /v1/post/_/health [get]
+// @Router /v1/post/_/cache_health [get]
 func AppHealthCheckHandler(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{
 		"status": true,
@@ -251,7 +345,12 @@ type CreatePostDto struct {
 *	Returns createPostDto,error
 */
 func CreatePostDtoValidator(ctx *gin.Context) (CreatePostDto,error) {
-    var createPostDto CreatePostDto
+	// check user permission
+	userRole := "user" // TODO: get user role from context and jwt
+	canWatch, _ := userRole.Can("post", "create")
+	fmt.Printf("Can watch %s? %t\n", rating, canWatch)
+    
+	var createPostDto CreatePostDto
 	// cast to json
     if err := ctx.BindJSON(&createPostDto); err != nil {
         ctx.JSON(http.StatusBadRequest, gin.H{
@@ -278,9 +377,18 @@ func CreatePostDtoValidator(ctx *gin.Context) (CreatePostDto,error) {
 
 
 
-/**
-*	CreatePostHandler : Create Post
-*/
+// CreatePostHandler : Create Post
+// @Summary Creates post by given CreatePostDto
+// @Schemes 
+// @Description Checks if app is running and returns container info
+// @Tags post-service
+// @Accept application/json
+// @Produce json
+// @Success 200 {object} object
+// @Failure 400 {object} object
+// @Failure 422 {object} object
+// @Router /v1/post/_/health [get]
+// @Router /v1/post/_/cache_health [get]
 func CreatePostHandler(ctx *gin.Context) {
 	// validate request
 	createPostDto,err := CreatePostDtoValidator(ctx)
