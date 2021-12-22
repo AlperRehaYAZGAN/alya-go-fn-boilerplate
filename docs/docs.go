@@ -23,8 +23,8 @@ var doc = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/v1/post/_/cache_health": {
-            "get": {
+        "/v1/post/": {
+            "post": {
                 "description": "Checks if app is running and returns container info",
                 "consumes": [
                     "application/json"
@@ -58,11 +58,11 @@ var doc = `{
                 }
             }
         },
-        "/v1/post/_/health": {
+        "/v1/post/_/cache_health": {
             "get": {
                 "description": "Checks if app is running and returns container info",
                 "consumes": [
-                    "application/json"
+                    "*/*"
                 ],
                 "produces": [
                     "application/json"
@@ -70,22 +70,33 @@ var doc = `{
                 "tags": [
                     "post-service"
                 ],
-                "summary": "Creates post by given CreatePostDto",
+                "summary": "App Healt Check",
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
                             "type": "object"
                         }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object"
-                        }
-                    },
-                    "422": {
-                        "description": "Unprocessable Entity",
+                    }
+                }
+            }
+        },
+        "/v1/post/_/health": {
+            "get": {
+                "description": "Checks if app is running and returns container info",
+                "consumes": [
+                    "*/*"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "post-service"
+                ],
+                "summary": "App Healt Check",
+                "responses": {
+                    "200": {
+                        "description": "OK",
                         "schema": {
                             "type": "object"
                         }
