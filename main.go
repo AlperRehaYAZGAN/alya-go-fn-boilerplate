@@ -28,7 +28,7 @@ import (
 	// third party packages
 	"github.com/joho/godotenv"
 	osstatus "github.com/fukata/golang-stats-api-handler"
-	docs "git.yazgan.xyz/alperreha/alya-go-fn-boilerplate/docs"
+	docs "git.yazgan.xyz/alya-go-fn-boilerplate/docs"
 	swaggerfiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 
@@ -244,7 +244,6 @@ func main() {
 	// create memory store for caching (Look to /cache_health)
 	store := persistence.NewInMemoryStore(time.Second)
 
-	docs.SwaggerInfo.BasePath = "/v1"
 	version := r.Group("/v1")
 	{
 		service := version.Group("/post")
@@ -254,16 +253,32 @@ func main() {
 			*/
 			service.GET("/", GetPostHandler)
 			service.POST("/", CreatePostHandler)
-			//service.GET("/:id", GetPostByIdHandler)
+			service.GET("/:id", GetPostByIdHandler)
 
 			/**
 			*	--------------- HEALTH ROUTES ---------------
 			*/
-			status := service.Group("/_") 
+			status := version.Group("/_") 
 			{
 				// if mode is production disable swagger
 				if os.Getenv("APP_ENV") != "production" {
-					status.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
+					status.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler,
+						swaggerfiles.SwaggerInfo.Title = "Post Microservice API"
+						swaggerfiles.SwaggerInfo.Description = "This is a Post Microservice API"
+						swaggerfiles.SwaggerInfo.Version = appVersion
+						swaggerfiles.SwaggerInfo.BasePath = "/v1"
+						// bearer auth
+						swaggerfiles.SecurityDefinitions["Bearer"] = &swaggerfiles.SecurityDefinition{
+							Type: "apiKey",
+							Name: "Authorization",
+							In: "header",
+						}
+						swaggerfiles.SecuritySchemes["Bearer"] = &swaggerfiles.SecurityScheme{
+							Type: "apiKey",
+							In: "header",
+							Name: "Authorization",
+						}
+						))
 				}
 
 				status.GET("/app_kernel_stats", gin.BasicAuth(gin.Accounts{ statUsername : statPassword }) ,func (ctx *gin.Context) {
@@ -273,8 +288,8 @@ func main() {
 				/**
 				*	Caching Example (Docs: https://github.com/gin-contrib/cache)
 				*/
-				status.GET("/health", AppHealthCheckHandler)
-				status.GET("/cache_health", cache.CachePage(store, time.Minute,AppHealthCheckHandler))
+				service.GET("/health", AppHealthCheckHandler)
+				service.GET("/cache_health", cache.CachePage(store, time.Minute,AppHealthCheckHandler))
 			}
 		}
 
@@ -330,12 +345,10 @@ type CreatePostDto struct {
 *	Returns createPostDto,error
 */
 func CreatePostDtoValidator(ctx *gin.Context) (CreatePostDto,error) {
-	/*
 	// check user permission
 	userRole := "user" // TODO: get user role from context and jwt
 	canWatch, _ := userRole.Can("post", "create")
 	fmt.Printf("Can watch %s? %t\n", rating, canWatch)
-	*/
     
 	var createPostDto CreatePostDto
 	// cast to json
@@ -374,7 +387,8 @@ func CreatePostDtoValidator(ctx *gin.Context) (CreatePostDto,error) {
 // @Success 200 {object} object
 // @Failure 400 {object} object
 // @Failure 422 {object} object
-// @Router /v1/post/ [post]
+// @Router /v1/post/_/health [get]
+// @Router /v1/post/_/cache_health [get]
 func CreatePostHandler(ctx *gin.Context) {
 	// validate request
 	createPostDto,err := CreatePostDtoValidator(ctx)

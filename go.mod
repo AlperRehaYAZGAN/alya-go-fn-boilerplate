@@ -1,8 +1,6 @@
-module git.yazgan.xyz/alperreha/alya-go-fn-boilerplate
+module git.yazgan.xyz/alperreha/alya-go-fn-boilerplate.git
 
 go 1.17
-
-require github.com/swaggo/swag v1.7.6
 
 require (
 	github.com/KyleBanks/depth v1.2.1 // indirect
@@ -46,6 +44,7 @@ require (
 	github.com/shurcooL/sanitized_anchor_name v1.0.0 // indirect
 	github.com/swaggo/files v0.0.0-20210815190702-a29dd2bc99b2 // indirect
 	github.com/swaggo/gin-swagger v1.3.3 // indirect
+	github.com/swaggo/swag v1.7.6 // indirect
 	github.com/ugorji/go/codec v1.2.6 // indirect
 	github.com/urfave/cli/v2 v2.3.0 // indirect
 	github.com/zpatrick/rbac v0.0.0-20180829190353-d2c4f050cf28 // indirect

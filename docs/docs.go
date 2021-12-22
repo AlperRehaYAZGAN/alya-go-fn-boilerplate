@@ -23,8 +23,8 @@ var doc = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/v1/post/": {
-            "post": {
+        "/v1/post/_/cache_health": {
+            "get": {
                 "description": "Checks if app is running and returns container info",
                 "consumes": [
                     "application/json"
@@ -58,11 +58,11 @@ var doc = `{
                 }
             }
         },
-        "/v1/post/_/cache_health": {
+        "/v1/post/_/health": {
             "get": {
                 "description": "Checks if app is running and returns container info",
                 "consumes": [
-                    "*/*"
+                    "application/json"
                 ],
                 "produces": [
                     "application/json"
@@ -70,33 +70,22 @@ var doc = `{
                 "tags": [
                     "post-service"
                 ],
-                "summary": "App Healt Check",
+                "summary": "Creates post by given CreatePostDto",
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
                             "type": "object"
                         }
-                    }
-                }
-            }
-        },
-        "/v1/post/_/health": {
-            "get": {
-                "description": "Checks if app is running and returns container info",
-                "consumes": [
-                    "*/*"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "post-service"
-                ],
-                "summary": "App Healt Check",
-                "responses": {
-                    "200": {
-                        "description": "OK",
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
                         "schema": {
                             "type": "object"
                         }
