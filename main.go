@@ -17,6 +17,16 @@ package main
 // @host localhost:9090
 // @BasePath /v1
 
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+
+// @securityDefinitions.basic BasicAuth
+// @in header
+// @name Authentication
+
+
 // @title Alya API Sample Post Service
 // @version 1.0
 // @description This is a sample server for Post Service.
@@ -58,8 +68,8 @@ import (
 	"github.com/go-playground/validator/v10"
 	// database packages
 	"gorm.io/gorm"
-	// "gorm.io/driver/postgres" 
-	"gorm.io/driver/sqlite"
+	"gorm.io/driver/postgres" 
+	// "gorm.io/driver/sqlite"
 	// event packages
 	// go get github.com/nats-io/nats.go/@v1.13.0
 	"github.com/nats-io/nats.go"
@@ -129,9 +139,12 @@ func InitNatsConnection() (*nats.Conn, error) {
 */
 var db *gorm.DB
 
-func InitDbConnection() {
+func InitDbConnection(dbConnString string) {
     var err error
-    db, err = gorm.Open(sqlite.Open("gorm.db"), &gorm.Config{})
+	//sqlite
+    // db, err = gorm.Open(sqlite.Open("gorm.db"), &gorm.Config{})
+	// postgres
+	db, err = gorm.Open(postgres.Open(dbConnString), &gorm.Config{})
     if err != nil {
         log.Panic(err)
     }
@@ -167,11 +180,18 @@ func main() {
 	// load .env file from path.join (process.cwd() + .env)
 	err = godotenv.Load(dir + "/.env")
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		// not found .env file. Log print not fatal
+		log.Print("Error loading .env file ENV variables using if exist instead. ",err)
+	}
+
+	// get db connection string
+	dbConnectionString := os.Getenv("DB_CONN_STRING")
+	if dbConnectionString == "" {
+		log.Fatal("DB_CONN_STRING is not defined in .env file")
 	}
 
 	// init database connection and pool settings
-	InitDbConnection()
+	InitDbConnection(dbConnectionString)
 	dbConn, err := db.DB()
 	if err != nil {
 		log.Println("Error initial connection to database")
@@ -260,7 +280,6 @@ func main() {
 	store := persistence.NewInMemoryStore(time.Second)
 
 	docs.SwaggerInfo.BasePath = "/v1"
-	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
 	version := r.Group("/v1")
 	{
 		service := version.Group("/post")
@@ -268,7 +287,7 @@ func main() {
 			/**
 			*	--------------- APP ROUTES ---------------
 			*/
-			service.GET("/", GetPostHandler)
+			service.GET("/", GetPostsHandler)
 			service.POST("/", CreatePostHandler)
 			//service.GET("/:id", GetPostByIdHandler)
 
@@ -278,9 +297,9 @@ func main() {
 			status := service.Group("/_") 
 			{
 				// if mode is production disable swagger
-				status.GET("/app_kernel_stats" ,func (ctx *gin.Context) {
-					ctx.JSON(http.StatusOK, osstatus.GetStats())
-				})
+				status.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
+
+				status.GET("/app_kernel_stats", AppKernelStatsHandler)
 
 				/**
 				*	Caching Example (Docs: https://github.com/gin-contrib/cache)
@@ -305,11 +324,27 @@ func main() {
 }
 
 
-// AppHealtCheckHandler is a simple health check endpoint
-// @Summary App Healt Check
+// AppHealtCheckHandler godoc
+// @Summary Returns container kernel info
+// @Schemes 
+// @Description Returns container kernel info
+// @Tags post-service-health
+// @Security BasicAuth
+// @Accept */*
+// @Produce json
+// @Success 200 {object} object
+// @Router /post/_/app_kernel_stats [get]
+func AppKernelStatsHandler(ctx *gin.Context) {
+	ctx.JSON(http.StatusOK, osstatus.GetStats())
+}
+
+
+// AppHealtCheckHandler godoc
+// @Summary is a simple health check endpoint
 // @Schemes 
 // @Description Checks if app is running and returns container info
-// @Tags post-service
+// @Tags post-service-health
+// @Security BasicAuth
 // @Accept */*
 // @Produce json
 // @Success 200 {object} object
@@ -375,15 +410,18 @@ func CreatePostDtoValidator(ctx *gin.Context) (CreatePostDto,error) {
 
 
 
-// CreatePostHandler : Create Post
-// @Summary Creates post by given CreatePostDto
+// CreatePostHandler godoc
+// @Summary Create Post by CreatePostDto
 // @Schemes 
-// @Description Checks if app is running and returns container info
+// @Description Create Post by CreatePostDto
 // @Tags post-service
+// @Security BearerAuth
+// @Body CreatePostDto
 // @Accept application/json
 // @Produce json
 // @Success 200 {object} object
 // @Failure 400 {object} object
+// @Failure 401 {object} object
 // @Failure 422 {object} object
 // @Router /post/ [post]
 func CreatePostHandler(ctx *gin.Context) {
@@ -427,7 +465,26 @@ func CreatePostHandler(ctx *gin.Context) {
 *	5 - Emit event for notify other services for changes
 *	6 - Return response
 */
-func GetPostHandler(ctx *gin.Context) {
+
+
+
+
+// GetPostsHandler godoc
+// @Summary Get Posts
+// @Schemes 
+// @Description Get Posts with limit and page
+// @Tags post-service
+// @Param limit query int false "limit"
+// @Param page query int false "page"
+// @Accept application/json
+// @Produce json
+// @Success 200 {object} object
+// @Failure 400 {object} object
+// @Failure 401 {object} object
+// @Failure 422 {object} object
+// @Failure 500 {object} object
+// @Router /post/ [get]
+func GetPostsHandler(ctx *gin.Context) {
 	// get pagination params page should be 1<=page<100 and limit should be 1<=limit<50
 	limitQ := ctx.DefaultQuery("limit", "10")
 	if(limitQ == "" || limitQ < "1" || limitQ > "100") { limitQ = "10" } 

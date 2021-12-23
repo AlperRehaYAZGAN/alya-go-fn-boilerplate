@@ -4,22 +4,31 @@
 FROM golang:1.17-alpine3.15 AS build-env
 RUN apk add build-base
 
+WORKDIR /src
+
+COPY go.mod ./
+COPY go.sum ./
+COPY *.go ./
+RUN go mod download
+
 # run swagger then build swag doc
-RUN go get -u github.com/go-swagger/go-swagger/cmd/swagger
+RUN go get github.com/swaggo/swag/cmd/swag
+# run swagger from GOPATH
+RUN swag init -g main.go
 
-RUN swag init -g main.go 
+RUN go build -o alyagofn
 
-ADD . /src
-
-RUN cd /src && go build -o goapp
 
 # final stage
-FROM alpine
+FROM alpine:3.14
+
 WORKDIR /app
 # copy swagger doc
 COPY --from=build-env /src/docs /app/docs
 # copy binary
-COPY --from=build-env /src/goapp /app/
+COPY --from=build-env /src/alyagofn /app/
 
+
+EXPOSE 9090
 # run binary
-ENTRYPOINT ./goapp
+ENTRYPOINT ./alyagofn
