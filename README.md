@@ -1,17 +1,17 @@
 # alya-go-fn-boilerplate 
 Go-fn Boilerplate for Web Functions  
 
-This projects aiming to create a deployment ready go skeleton webserver for fast development uses Gin.  
+A Simple Golang Gin Web Server Boilerplate that includes Redis, Postgresql, Validator and common Security improvements. In deployment side, Dockerfile, required containers docker-compose.yml file for start development faster.  
 
-# Usage  
+# Usage     
 Usage is simple! Basically Clone->Run-Requirements->Build->Run-App consept.  
 
-- git clone https://git.yazgan.xyz/alperreha/alya-go-fn-boilerplate
-- cd alya-go-fn-boilerplate
-- docker-compose up -d // create and run require containers (NATS,Redis, Minio and Postgresql)  
-- docker build -t postapp . (e.g. docker build -t hub.yazgan.xyz/myapp-go-service:1.0.0 . )  
+- `git clone https://git.yazgan.xyz/alperreha/alya-go-fn-boilerplate`
+- `cd alya-go-fn-boilerplate`
+- `docker-compose up -d` // create and run require containers (NATS,Redis, Minio and Postgresql)  
+- `docker build -t postapp .` (e.g. docker build -t hub.yazgan.xyz/myapp-go-service:1.0.0 . )  
 - Copy .env-test to .env file and configure your own. (e.g. `cp .env-test .env`)  
-- docker run --name alyafnpost -p 9090:9090
+- `docker run --name alyafnpost -p 9090:9090`
 
 # TODO:
 TODO: 
