@@ -1,5 +1,7 @@
 # env files
 .env
+*.env
+.env.*
 
 # ssl files
 ssl/
@@ -17,3 +19,6 @@ gorm.db
 
 # local development md file
 local-development.md
+
+# swagger dir
+docs/*

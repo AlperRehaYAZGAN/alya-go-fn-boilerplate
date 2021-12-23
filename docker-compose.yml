@@ -17,3 +17,30 @@ services:
     volumes:
       - ./volumes/redis:/data
     restart: always
+  # postgresql service
+  postgresql:
+    image: postgres:9.6.24-alpine3.15
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./volumes/postgres:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=alyafnuser
+      - POSTGRES_PASSWORD=alyafnuserpassword
+      - POSTGRES_DB=alyagofndev
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    restart: always
+  # minio s3 service
+  minio:
+    image: rancher/minio-minio:RELEASE.2020-07-13T18-09-56Z
+    ports:
+      - "9000:9000"
+    volumes:
+      - ./volumes/minio:/data
+    environment:
+      - MINIO_ACCESS_KEY=minio
+      - MINIO_SECRET_KEY=minio123
+      - MINIO_BROWSER=on
+    restart: always
+    # pass server /data to minio
+    command: server /data

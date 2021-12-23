@@ -14,19 +14,19 @@
 */
 package main
 
-// @title Alya API Post Service
-// @version 1.0
-// @description This is a sample server Post Service.
+// @host localhost:9090
+// @BasePath /v1
 
-// @contact.name API Support
-// @contact.url http://www.swagger.io/support
-// @contact.email support@swagger.io
+// @title Alya API Sample Post Service
+// @version 1.0
+// @description This is a sample server for Post Service.
+
+// @contact.name Alya API Support
+// @contact.url https://git.yazgan.xyz/alperreha/
+// @contact.email support@alperreha.yazgan.xyz
 
 // @license.name MIT
 // @license.url https://opensource.org/licenses/MIT
-
-// @host localhost:9090
-// @BasePath /v1
 
 
 import (
@@ -41,7 +41,7 @@ import (
 	// third party packages
 	"github.com/joho/godotenv"
 	osstatus "github.com/fukata/golang-stats-api-handler"
-	"git.yazgan.xyz/alperreha/alya-go-fn-boilerplate/docs"
+	"git.yazgan.xyz/alperreha/alya-go-fn-boilerplate/docs" // change here with your module name
 	swaggerfiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 
@@ -174,6 +174,7 @@ func main() {
 	InitDbConnection()
 	dbConn, err := db.DB()
 	if err != nil {
+		log.Println("Error initial connection to database")
 		log.Fatal(err)
 	}
 	dbConn.SetMaxOpenConns(10)
@@ -188,7 +189,8 @@ func main() {
 	// init nats connection
 	nc, err = InitNatsConnection()
 	if err != nil {
-		log.Println("error connecting to nats server", err)
+		log.Println("Error initial connection to NATS")
+		log.Fatal(err)
 	}
 
 
@@ -276,15 +278,14 @@ func main() {
 			status := service.Group("/_") 
 			{
 				// if mode is production disable swagger
-
-				status.GET("/app_kernel_stats", gin.BasicAuth(gin.Accounts{ statUsername : statPassword }) ,func (ctx *gin.Context) {
+				status.GET("/app_kernel_stats" ,func (ctx *gin.Context) {
 					ctx.JSON(http.StatusOK, osstatus.GetStats())
 				})
 
 				/**
 				*	Caching Example (Docs: https://github.com/gin-contrib/cache)
 				*/
-				status.GET("/health", AppHealthCheckHandler)
+				status.GET("/health", gin.BasicAuth(gin.Accounts{ statUsername : statPassword }) ,AppHealthCheckHandler)
 				status.GET("/cache_health", cache.CachePage(store, time.Minute,AppHealthCheckHandler))
 			}
 		}			
