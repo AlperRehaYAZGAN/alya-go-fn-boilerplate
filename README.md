@@ -6,12 +6,12 @@ A Simple Golang Gin Web Server Boilerplate that includes Redis, Postgresql, Vali
 # Usage     
 Usage is simple! Basically Clone->Run-Requirements->Build->Run-App consept.  
 
-- `git clone https://git.yazgan.xyz/anadolusigorta-pethackathon/service-location-notification`
-- `cd service-location-notification`
+- `git clone https://git.yazgan.xyz/alperreha/alya-go-fn-boilerplate`
+- `cd alya-go-fn-boilerplate`
 - `docker-compose up -d` // create and run require containers (NATS,Redis, Minio and Postgresql)  
-- `docker build -t servicetransaction .` (e.g. docker build -t hub.yazgan.xyz/myapp-go-service:1.0.0 . )  
+- `docker build -t postapp .` (e.g. docker build -t hub.yazgan.xyz/myapp-go-service:1.0.0 . )  
 - Copy .env-test to .env file and configure your own. (e.g. `cp .env-test .env`)  
-- `docker run --name alyafntransaction -p 9092:9092 servicetransaction`
+- `docker run --name alyafnpost -p 9090:9090`
 
 # TODO:
 TODO: 
@@ -20,11 +20,6 @@ TODO:
 [X] - NATS Event Pub&Sub, Request&Reply  
 [X] - Health Check Probe (GET /app_kernel_stats with basic auth in .env file)  
 [-] - Rate Limiting  
-
-
-# Screenshots:  
-
-![Swagger](./util/ss.jpg)
 
 
 

@@ -1,4 +1,4 @@
-module git.yazgan.xyz/anadolusigorta-pethackathon/service-location-notification
+module git.yazgan.xyz/alperreha/alya-go-fn-boilerplate
 
 go 1.17
 
