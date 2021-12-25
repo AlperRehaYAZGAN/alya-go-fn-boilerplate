@@ -14,7 +14,7 @@
 */
 package main
 
-// @host localhost:9090
+// @host api.pethackathon.yazgan.xyz
 // @BasePath /v1
 
 
@@ -27,11 +27,11 @@ package main
 // @name Authentication
 
 
-// @title Alya API Sample Post Service
+// @title Development Branch Transaction Service
 // @version 1.0
-// @description This is a sample server for Post Service.
+// @description This is a sample server for Transaction Service.
 
-// @contact.name Alya API Support
+// @contact.name Development Branch
 // @contact.url https://git.yazgan.xyz/alperreha/
 // @contact.email support@alperreha.yazgan.xyz
 
@@ -47,11 +47,13 @@ import (
 	"strconv"
 	"os"
 	"strings"
+	// json
+	"encoding/json"
 
 	// third party packages
 	"github.com/joho/godotenv"
 	osstatus "github.com/fukata/golang-stats-api-handler"
-	"git.yazgan.xyz/alperreha/alya-go-fn-boilerplate/docs" // change here with your module name
+	"git.yazgan.xyz/anadolusigorta-pethackathon/service-location-notification/docs"
 	swaggerfiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 
@@ -68,8 +70,8 @@ import (
 	"github.com/go-playground/validator/v10"
 	// database packages
 	"gorm.io/gorm"
-	"gorm.io/driver/postgres" 
-	// "gorm.io/driver/sqlite"
+	// "gorm.io/driver/postgres" 
+	"gorm.io/driver/sqlite"
 	// event packages
 	// go get github.com/nats-io/nats.go/@v1.13.0
 	"github.com/nats-io/nats.go"
@@ -84,21 +86,21 @@ var APP_ROLES = []rbac.Role{
 	{
 			RoleID: "Admin",
 			Permissions: []rbac.Permission{
-					rbac.NewGlobPermission("post", "*"),
+					rbac.NewGlobPermission("transaction", "*"),
 			},
 	},
 	{
 			RoleID: "User",
 			Permissions: []rbac.Permission{
-				rbac.NewGlobPermission("post", "read"),
-				rbac.NewGlobPermission("post", "create"),
-				rbac.NewGlobPermission("post", "delete"),
+				rbac.NewGlobPermission("transaction", "read"),
+				rbac.NewGlobPermission("transaction", "create"),
+				rbac.NewGlobPermission("transaction", "delete"),
 			},
 	},
 	{
 			RoleID: "Guest",
 			Permissions: []rbac.Permission{
-				rbac.NewGlobPermission("post", "read"),
+				rbac.NewGlobPermission("transaction", "read"),
 			},
 	},
 }
@@ -142,25 +144,31 @@ var db *gorm.DB
 func InitDbConnection(dbConnString string) {
     var err error
 	//sqlite
-    // db, err = gorm.Open(sqlite.Open("gorm.db"), &gorm.Config{})
+    db, err = gorm.Open(sqlite.Open("gorm.db"), &gorm.Config{})
 	// postgres
-	db, err = gorm.Open(postgres.Open(dbConnString), &gorm.Config{})
+	//db, err = gorm.Open(postgres.Open(dbConnString), &gorm.Config{})
     if err != nil {
         log.Panic(err)
     }
 }
 
 
-// Post object for Gorm
-type Post struct {
+// Transaction object for Gorm
+type Transaction struct {
 	gorm.Model
-	Body string `gorm:"column:body;size:255;not null" json:"body" validate:"required,min=1,max=255"`
+	OwnerID int `gorm:"column:owner_id;not null" json:"owner_id" validate:"required,min=1"`
+	PetID int `gorm:"column:pet_id;not null" json:"pet_id" validate:"required,min=1"`
+	Status int `gorm:"column:status;type:integer;default:1" json:"status" validate:"required,min=1"`
+	Message string `gorm:"column:message;size:255;not null" json:"message" validate:"required,min=1,max=255"`
+	Latitude float64 `gorm:"column:latitude;type:float;default:null" json:"latitude" validate:"required"`
+	Longitude float64 `gorm:"column:longitude;type:float;default:null" json:"longitude" validate:"required"`
+	Upload string `gorm:"column:upload;size:255;not null" json:"upload" validate:"required,min=1,max=255"`
 }
 
 
 // init database migrations if not exist
 func InitDbMigrations() {
-	db.AutoMigrate(&Post{})
+	db.AutoMigrate(&Transaction{})
 }
 
 
@@ -190,6 +198,12 @@ func main() {
 		log.Fatal("DB_CONN_STRING is not defined in .env file")
 	}
 
+	// get app version from .env file
+	appVersion = os.Getenv("APP_VERSION")
+	if appVersion == "" {
+		appVersion = "1.0.0"
+	}
+
 	// init database connection and pool settings
 	InitDbConnection(dbConnectionString)
 	dbConn, err := db.DB()
@@ -212,24 +226,6 @@ func main() {
 		log.Println("Error initial connection to NATS")
 		log.Fatal(err)
 	}
-
-
-	/**
-	*	Connect to Nats and Register Event Listener
-	*/
-	/*		
-	-----------------------------------------------------
-	THIS IS NOT NEEDED FOR THIS APP BUT BOILERPLATE SHOULD STAY
-	-----------------------------------------------------
-	// Simple Async Subscriber
-	nc.Subscribe("post.created", func(m *nats.Msg) {
-		log.Println("Received a post.created:", string(m.Data))
-	})
-
-	nc.Subscribe("post.select", func(m *nats.Msg) {
-		log.Println("Received a post.select:", string(m.Data))
-	})
-	*/
 
 	// create new gin app
     r := gin.Default()
@@ -282,14 +278,14 @@ func main() {
 	docs.SwaggerInfo.BasePath = "/v1"
 	version := r.Group("/v1")
 	{
-		service := version.Group("/post")
+		service := version.Group("/transaction")
 		{
 			/**
 			*	--------------- APP ROUTES ---------------
 			*/
-			service.GET("/", GetPostsHandler)
-			service.POST("/", CreatePostHandler)
-			//service.GET("/:id", GetPostByIdHandler)
+			service.GET("/", GetTransactionsHandler)
+			service.POST("/", CreateTransactionHandler)
+			service.GET("/:id", GetTxByIdHandler)
 
 			/**
 			*	--------------- HEALTH ROUTES ---------------
@@ -315,7 +311,7 @@ func main() {
 	// get app port
 	APP_PORT := os.Getenv("APP_PORT")
 	if APP_PORT == "" {
-		APP_PORT = "9090"
+		APP_PORT = "9092"
 	}
 	// start server
 	if err := r.Run(":" + APP_PORT); err != nil {
@@ -328,12 +324,12 @@ func main() {
 // @Summary Returns container kernel info
 // @Schemes 
 // @Description Returns container kernel info
-// @Tags post-service-health
+// @Tags transaction-service-health
 // @Security BasicAuth
 // @Accept */*
 // @Produce json
 // @Success 200 {object} object
-// @Router /post/_/app_kernel_stats [get]
+// @Router /transaction/_/app_kernel_stats [get]
 func AppKernelStatsHandler(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, osstatus.GetStats())
 }
@@ -343,13 +339,13 @@ func AppKernelStatsHandler(ctx *gin.Context) {
 // @Summary is a simple health check endpoint
 // @Schemes 
 // @Description Checks if app is running and returns container info
-// @Tags post-service-health
+// @Tags transaction-service-health
 // @Security BasicAuth
 // @Accept */*
 // @Produce json
 // @Success 200 {object} object
-// @Router /post/_/health [get]
-// @Router /post/_/cache_health [get]
+// @Router /transaction/_/health [get]
+// @Router /transaction/_/cache_health [get]
 func AppHealthCheckHandler(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{
 		"status": true,
@@ -359,7 +355,7 @@ func AppHealthCheckHandler(ctx *gin.Context) {
 }
 
 /**
-*	--------------- HTTP POST /post Section ---------------
+*	--------------- HTTP POST /transaction Section ---------------
 *	1 - Bind Request to DTO
 *	2 - Validate DTO
 *	3 - Connect to Database
@@ -367,79 +363,120 @@ func AppHealthCheckHandler(ctx *gin.Context) {
 *	5 - Emit event for notify other services for changes
 *	6 - Return response
 */
-type CreatePostDto struct {
-	Body string `json:"body" validate:"required,min=1,max=255"`
+type CreateTransactionDto struct {
+	OwnerID int /**/ `json:"owner_id" validate:"required,min=1"` /**/
+	PetID int `json:"pet_id" validate:"required,min=1"`
+	Status int `json:"status" validate:"required,min=1,max=10"`
+	Message string `json:"message" validate:"required,min=1,max=255"`
+	Latitude float64 `json:"latitude" validate:"required,min=-90,max=90"`
+	Longitude float64 `json:"longitude" validate:"required,min=-180,max=180"`
+	Upload string `json:"upload" validate:"required,min=1,max=255"`
 }
 
+
 /**
-*	CreatePostDtoValidator : Validate CreatePostDto
-*	Returns createPostDto,error
+*	CreateTransactionDtoValidator : Validate CreateTransactionDto
+*	Returns createTxDto,error
 */
-func CreatePostDtoValidator(ctx *gin.Context) (CreatePostDto,error) {
-	/*
-	// check user permission
-	userRole := "user" // TODO: get user role from context and jwt
-	canWatch, _ := userRole.Can("post", "create")
-	fmt.Printf("Can watch %s? %t\n", rating, canWatch)
-	*/
-    
-	var createPostDto CreatePostDto
+func CreateTransactionDtoValidator(ctx *gin.Context) (CreateTransactionDto,error) {
+	var createTxDto CreateTransactionDto
 	// cast to json
-    if err := ctx.BindJSON(&createPostDto); err != nil {
+    if err := ctx.BindJSON(&createTxDto); err != nil {
         ctx.JSON(http.StatusBadRequest, gin.H{
 			"status": false,
-			"type": "create-post/request-body",
+			"type": "create-tx/request-body",
             "message": err.Error(),
         })
 		// return error
-		return createPostDto,err
+		return createTxDto,err
     }
 	// validate
 	validateDto := validator.New()
-	if err := validateDto.Struct(createPostDto); err != nil {
+	if err := validateDto.Struct(createTxDto); err != nil {
         ctx.JSON(http.StatusBadRequest, gin.H{
 			"status": false,
-			"type": "create-post/validation",
+			"type": "create-tx/validation",
 			"message": err.Error(),
         })
-		return createPostDto,err
+		return createTxDto,err
     }
-	// return createPostDto
-	return createPostDto,nil
+	// return createTxDto
+	return createTxDto,nil
 }
 
 
 
-// CreatePostHandler godoc
-// @Summary Create Post by CreatePostDto
+// CreateTransactionHandler godoc
+// @Summary Create Transaction by CreateTransactionDto
 // @Schemes 
-// @Description Create Post by CreatePostDto
-// @Tags post-service
+// @Description Create Transaction by CreateTransactionDto
+// @Tags transaction-service
 // @Security BearerAuth
-// @Body CreatePostDto
+// @Body CreateTransactionDto
 // @Accept application/json
 // @Produce json
+// @Param body body CreateTransactionDto true "Create Transaction Dto"
 // @Success 200 {object} object
 // @Failure 400 {object} object
 // @Failure 401 {object} object
 // @Failure 422 {object} object
-// @Router /post/ [post]
-func CreatePostHandler(ctx *gin.Context) {
+// @Router /transaction/ [post]
+func CreateTransactionHandler(ctx *gin.Context) {
 	// validate request
-	createPostDto,err := CreatePostDtoValidator(ctx)
-	if err != nil { return }		
+	createTxDto,err := CreateTransactionDtoValidator(ctx)
+	if err != nil { return }
+
+	/*
+	// get bearer token from header
+	bearerToken := ctx.GetHeader("Authorization")
+	if bearerToken == "" {
+		ctx.JSON(http.StatusUnauthorized, gin.H{
+			"status": false,
+			"type": "create-tx/auth",
+			"message": "Bearer token not found",
+		})
+		return
+	}
+
+	// get userid from NATS.Request from Auth Service. Service return userid as string or "false" as string
+	userID,err := nats.Request("user.isvalid",bearerToken, time.Second*5)
+	if err != nil {
+		ctx.JSON(http.StatusUnauthorized, gin.H{
+			"status": false,
+			"type": "create-tx/auth",
+			"message": "Bearer token not found",
+		})
+		return
+	}
+	// convert userid to int
+	userIDInt,err := strconv.Atoi(string(userID.Data))
+	if ((err != nil) || (userIDInt == 0)) {
+		ctx.JSON(http.StatusUnauthorized, gin.H{
+			"status": false,
+			"type": "create-tx/auth",
+			"message": "Bearer token not found",
+		})
+		return
+	}
+	*/
 	
-	// create new product
-	post := Post{
-		Body: createPostDto.Body,
+	// create new transaction
+	tx := Transaction{
+		OwnerID: /* userIDInt */ createTxDto.OwnerID,
+		PetID: createTxDto.PetID,
+		Status: createTxDto.Status,
+		Message: createTxDto.Message,
+		Latitude: createTxDto.Latitude,
+		Longitude: createTxDto.Longitude,
+		Upload: createTxDto.Upload,
 	}
 
 	// save to database
-	db.Create(&post)
-	if post.ID == 0 {
+	db.Create(&tx)
+	if tx.ID == 0 {
 		ctx.JSON(http.StatusUnprocessableEntity, gin.H{
 			"status": false,
-			"type": "create-post/save",
+			"type": "create-tx/save",
 			"message": "Unprocessable inputs ensured.",
 		})
 		return
@@ -447,18 +484,21 @@ func CreatePostHandler(ctx *gin.Context) {
 
 	// fire event for notify other services for changes
 	// Simple Publisher
-	nc.Publish("post.created", []byte("Post Created Body: " + post.Body))
+	nc.Publish("tx.created", []byte("Transaction Created Message: " + tx.Message))
 
-	// return post
+	// return transaction
 	ctx.JSON(http.StatusOK, gin.H{
-		"post": post,
+		"status": true,
+		"type": "create-tx/success",
+		"message": "Transaction Created Successfully",
+		"transaction": tx,
 	})
 }
 
 
 
 /**
-*	--------------- HTTP Get /post Section ---------------
+*	--------------- HTTP Get /transaction Section ---------------
 *	1 - Get Pagination values
 *	3 - Connect to Database
 *	4 - Do your database operations
@@ -469,22 +509,22 @@ func CreatePostHandler(ctx *gin.Context) {
 
 
 
-// GetPostsHandler godoc
-// @Summary Get Posts
+// GetTransactionsHandler godoc
+// @Summary Get Transactions
 // @Schemes 
-// @Description Get Posts with limit and page
-// @Tags post-service
-// @Param limit query int false "limit"
-// @Param page query int false "page"
+// @Description Get Transactions with limit and page
+// @Tags transaction-service
 // @Accept application/json
 // @Produce json
+// @Param limit query int false "limit"
+// @Param page query int false "page"
 // @Success 200 {object} object
 // @Failure 400 {object} object
 // @Failure 401 {object} object
 // @Failure 422 {object} object
 // @Failure 500 {object} object
-// @Router /post/ [get]
-func GetPostsHandler(ctx *gin.Context) {
+// @Router /transaction/ [get]
+func GetTransactionsHandler(ctx *gin.Context) {
 	// get pagination params page should be 1<=page<100 and limit should be 1<=limit<50
 	limitQ := ctx.DefaultQuery("limit", "10")
 	if(limitQ == "" || limitQ < "1" || limitQ > "100") { limitQ = "10" } 
@@ -494,17 +534,103 @@ func GetPostsHandler(ctx *gin.Context) {
 	// cast to int
 	limit,_ := strconv.Atoi(limitQ)
 	page,_ := strconv.Atoi(pageQ)
+	if(page < 1) { page = 1 }
 	offset := (page - 1) * limit
 
-	// get all posts by limit and offset
-	var posts []Post
-	db.Limit(limit).Offset(offset).Find(&posts)
+	// get all txs by limit and offset
+	var txs []Transaction
+	db.Limit(limit).Offset(offset).Find(&txs)
 
 	// fire event for notify other services for changes
-	nc.Publish("post.select", []byte("Post Got by ip: " + ctx.ClientIP()))
+	nc.Publish("tx.select", []byte("Tx Got by ip: " + ctx.ClientIP()))
 
-	// return posts
+	// return transactions
 	ctx.JSON(http.StatusOK, gin.H{
-		"posts": posts,
+		"transactions": txs,
+	})
+}
+
+
+
+// GetTxByIdHandler godoc
+// @Summary Get Transaction by ID
+// @Schemes 
+// @Description Get Transaction by ID
+// @Tags transaction-service
+// @Accept application/json
+// @Produce json
+// @Param id path string true "Transaction ID"
+// @Success 200 {object} object
+// @Failure 400 {object} object
+// @Failure 401 {object} object
+// @Failure 500 {object} object
+// @Router /transaction/{id} [get]
+func GetTxByIdHandler(ctx *gin.Context) {
+	// get Transaction id from url params like /transaction/:id 
+	txIdQ := ctx.Param("id")
+	// cast to int
+	txId,err := strconv.Atoi(txIdQ)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"status": false,
+			"type": "get-tx/validation",
+			"message": "Invalid Transaction ID",
+		})
+		return
+	}
+
+	// get transaction by id
+	var tx Transaction
+	db.First(&tx, txId)
+	if tx.ID == 0 {
+		ctx.JSON(http.StatusNotFound, gin.H{
+			"status": false,
+			"type": "get-tx/not-found",
+			"message": "Transaction not found",
+		})
+		return
+	}
+
+	// fire event for notify other services for changes
+	nc.Publish("tx.select", []byte("Transaction got by ip: " + ctx.ClientIP()))
+
+
+	// get user.info
+	userIdStr := strconv.Itoa(tx.OwnerID)
+	msgUser, errU := nc.Request("user.info", []byte(userIdStr) , time.Second)
+	// get pet.info
+	petIdStr := strconv.Itoa(tx.PetID)
+	msgPet, errP := nc.Request("pet.info", []byte(petIdStr) , time.Second)
+
+	// set any json data from user.info and pet.info
+	var userInfo map[string]interface{}
+	var petInfo map[string]interface{}
+	
+	// check errors
+	if errU != nil {
+		userInfo = nil
+	} else {
+		// decode msgUser.Data to json
+		err = json.Unmarshal(msgUser.Data, &userInfo)
+		if err != nil {
+			userInfo = nil
+		} 
+	}
+	// check errors
+	if errP != nil {
+		petInfo = nil
+	} else {
+		// decode msgPet.Data to json
+		err = json.Unmarshal(msgPet.Data, &petInfo)
+		if err != nil {
+			petInfo = nil
+		} 
+	}
+
+	// return transaction
+	ctx.JSON(http.StatusOK, gin.H{
+		"transaction": tx,
+		"user": userInfo,
+		"pet": petInfo,
 	})
 }
