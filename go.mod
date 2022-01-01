@@ -1,4 +1,4 @@
-module git.yazgan.xyz/alperreha/kampusapp-final
+module git.yazgan.xyz/alperreha/alya-go-fn-boilerplate
 
 go 1.17
 
