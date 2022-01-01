@@ -11,12 +11,11 @@
 *	4. Do your database operations (e.g. db.Create(&supplier))
 *	5. Emit event for notify other services for changes (e.g. emitEvent)
 *	6. Return response;
-*/
+ */
 package main
 
-// @host localhost:9090
+// @host localhost:8086
 // @BasePath /v1
-
 
 // @securityDefinitions.apikey BearerAuth
 // @in header
@@ -26,10 +25,9 @@ package main
 // @in header
 // @name Authentication
 
-
-// @title Alya API Sample Post Service
+// @title KampusApp Server
 // @version 1.0
-// @description This is a sample server for Post Service.
+// @description YTU Kampusapp Server
 
 // @contact.name Alya API Support
 // @contact.url https://git.yazgan.xyz/alperreha/
@@ -38,84 +36,47 @@ package main
 // @license.name MIT
 // @license.url https://opensource.org/licenses/MIT
 
-
 import (
 	// system packages
-    "net/http"
-	"time"
 	"log"
-	"strconv"
+	"net/http"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	// third party packages
-	"github.com/joho/godotenv"
+	"git.yazgan.xyz/alperreha/kampusapp-final/docs"
 	osstatus "github.com/fukata/golang-stats-api-handler"
-	"git.yazgan.xyz/alperreha/alya-go-fn-boilerplate/docs" // change here with your module name
+	"github.com/joho/godotenv"
 	swaggerfiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 
 	// web server packages
-    "github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin"
 	// page cacher
 	"github.com/gin-contrib/cache"
 	"github.com/gin-contrib/cache/persistence"
+
 	// security headers
 	"github.com/gin-contrib/secure"
 	// rbac middleware
-	"github.com/zpatrick/rbac"
+
 	// validator packages
 	"github.com/go-playground/validator/v10"
 	// database packages
+	// "gorm.io/driver/postgres"
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"gorm.io/driver/postgres" 
-	// "gorm.io/driver/sqlite"
+
 	// event packages
 	// go get github.com/nats-io/nats.go/@v1.13.0
 	"github.com/nats-io/nats.go"
-
 )
-
-
-/**
-*	App RBAC Definitions
-*/
-var APP_ROLES = []rbac.Role{
-	{
-			RoleID: "Admin",
-			Permissions: []rbac.Permission{
-					rbac.NewGlobPermission("post", "*"),
-			},
-	},
-	{
-			RoleID: "User",
-			Permissions: []rbac.Permission{
-				rbac.NewGlobPermission("post", "read"),
-				rbac.NewGlobPermission("post", "create"),
-				rbac.NewGlobPermission("post", "delete"),
-			},
-	},
-	{
-			RoleID: "Guest",
-			Permissions: []rbac.Permission{
-				rbac.NewGlobPermission("post", "read"),
-			},
-	},
-}
-
-/*
-for _, role := range roles {
-	fmt.Println("Role:", role.RoleID)
-	for _, rating := range []string{"g", "pg-13", "r"} {
-			canWatch, _ := role.Can("watch", rating)
-			fmt.Printf("Can watch %s? %t\n", rating, canWatch)
-	}
-}
-*/
 
 /**
 *	ConnectNats : Connect to Nats
-*/
+ */
 var nc *nats.Conn
 
 func InitNatsConnection() (*nats.Conn, error) {
@@ -132,41 +93,75 @@ func InitNatsConnection() (*nats.Conn, error) {
 	return nc, nil
 }
 
-
-
 /**
 *	Database Pool Variable
-*/
+ */
 var db *gorm.DB
 
 func InitDbConnection(dbConnString string) {
-    var err error
+	var err error
 	//sqlite
-    // db, err = gorm.Open(sqlite.Open("gorm.db"), &gorm.Config{})
+	db, err = gorm.Open(sqlite.Open("gorm.db"), &gorm.Config{})
 	// postgres
-	db, err = gorm.Open(postgres.Open(dbConnString), &gorm.Config{})
-    if err != nil {
-        log.Panic(err)
-    }
+	// db, err = gorm.Open(postgres.Open(dbConnString), &gorm.Config{})
+	if err != nil {
+		log.Panic(err)
+	}
 }
 
+// User object for Gorm
+type User struct {
+	gorm.Model
+	Body            string     `gorm:"column:body;size:255;not null" json:"body" validate:"required,min=1,max=255"`
+	Username        string     `gorm:"column:username;size:32;not null" json:"username" validate:"required,min=1,max=32"`
+	Nickname        string     `gorm:"column:nickname;size:16;not null" json:"nickname" validate:"required,min=1,max=16"`
+	Slug            string     `gorm:"column:slug;size:16;not null" json:"slug" validate:"required,min=1,max=16"`
+	Email           string     `gorm:"column:email;size:255;not null" json:"email" validate:"required,min=1,max=255"`
+	Password        string     `gorm:"column:password;size:128;not null" json:"password" validate:"required,min=1,max=128"`
+	Type            int        `gorm:"column:type;not null;default:0" json:"type" validate:"required,min=1,max=4"`
+	EmailVerifiedAt *time.Time `gorm:"column:email_verified_at;default:null" json:"email_verified_at"`
+}
 
 // Post object for Gorm
 type Post struct {
 	gorm.Model
-	Body string `gorm:"column:body;size:255;not null" json:"body" validate:"required,min=1,max=255"`
+	UserID   uint   `gorm:"column:user_id;not null" json:"user_id" validate:"required,min=1"`
+	ParentID uint   `gorm:"column:parent_id;not null" json:"parent_id" validate:"required,min=1"`
+	Body     string `gorm:"column:body;size:255;not null" json:"body" validate:"required,min=1,max=255"`
+	Type     int    `gorm:"column:type;not null;default:1" json:"type" validate:"required,min=1,max=4"`
+	Uploads  string `gorm:"column:uploads;size:255;not null" json:"uploads" validate:"required,min=1,max=255"`
+	// Post Meta Data Columns
+	Tag1ID    uint `gorm:"column:tag1_id;defualt:null" json:"tag1_id" validate:"omitempty,min=1"`
+	Tag2ID    uint `gorm:"column:tag2_id;defualt:null" json:"tag2_id" validate:"omitempty,min=1"`
+	Tag3ID    uint `gorm:"column:tag3_id;defualt:null" json:"tag3_id" validate:"omitempty,min=1"`
+	Liked     int  `gorm:"column:liked;not null;default:0" json:"liked" validate:"omitempty,min=1,max=1"`
+	Commented int  `gorm:"column:commented;not null;default:0" json:"commented" validate:"required,min=1,max=1"`
+	Viewed    int  `gorm:"column:viewed;not null;default:0" json:"viewed" validate:"required,min=1,max=1"`
 }
 
+type Like struct {
+	gorm.Model
+	UserID uint `gorm:"column:user_id;not null" json:"user_id" validate:"required,min=1"`
+	PostID uint `gorm:"column:post_id;not null" json:"post_id" validate:"required,min=1"`
+}
+
+type Tag struct {
+	gorm.Model
+	Name string `gorm:"column:name;size:16;not null" json:"name" validate:"required,min=1,max=16"`
+	Slug string `gorm:"column:slug;size:16;not null" json:"slug" validate:"required,min=1,max=16"`
+}
 
 // init database migrations if not exist
 func InitDbMigrations() {
+	db.AutoMigrate(&User{})
 	db.AutoMigrate(&Post{})
+	db.AutoMigrate(&Like{})
+	db.AutoMigrate(&Tag{})
 }
-
 
 /**
 *	APP VERSION
-*/
+ */
 // app start time
 var startTime = time.Now()
 var appVersion = "1.0.0" // -> this will auto update when load from .env
@@ -181,7 +176,7 @@ func main() {
 	err = godotenv.Load(dir + "/.env")
 	if err != nil {
 		// not found .env file. Log print not fatal
-		log.Print("Error loading .env file ENV variables using if exist instead. ",err)
+		log.Print("Error loading .env file ENV variables using if exist instead. ", err)
 	}
 
 	// get db connection string
@@ -201,10 +196,8 @@ func main() {
 	dbConn.SetMaxIdleConns(5)
 	dbConn.SetConnMaxLifetime(time.Minute * 5)
 
-
 	// init database migrations
 	InitDbMigrations()
-
 
 	// init nats connection
 	nc, err = InitNatsConnection()
@@ -213,36 +206,18 @@ func main() {
 		log.Fatal(err)
 	}
 
-
-	/**
-	*	Connect to Nats and Register Event Listener
-	*/
-	/*		
-	-----------------------------------------------------
-	THIS IS NOT NEEDED FOR THIS APP BUT BOILERPLATE SHOULD STAY
-	-----------------------------------------------------
-	// Simple Async Subscriber
-	nc.Subscribe("post.created", func(m *nats.Msg) {
-		log.Println("Received a post.created:", string(m.Data))
-	})
-
-	nc.Subscribe("post.select", func(m *nats.Msg) {
-		log.Println("Received a post.select:", string(m.Data))
-	})
-	*/
-
 	// create new gin app
-    r := gin.Default()
+	r := gin.Default()
 	// gin maybe behind proxy so we need trust only known proxy
 	r.SetTrustedProxies([]string{"0.0.0.0"})
 
 	/**
 	*	Security Middleware (Docs: https://github.com/gin-contrib/secure)
-	*/
+	 */
 	// allowedHosts : os.Getenv("ALLOWED_HOSTS") then split by comma
 	allowedHosts := []string{}
 	if os.Getenv("ALLOWED_HOSTS") != "" {
-		allowedHosts = strings.Split(os.Getenv("ALLOWED_HOSTS"),",")
+		allowedHosts = strings.Split(os.Getenv("ALLOWED_HOSTS"), ",")
 	}
 	// sslHost : os.Getenv("SSL_HOST")
 	sslHost := os.Getenv("SSL_HOST")
@@ -255,15 +230,15 @@ func main() {
 	// r.Use(secure.New(securityConfig))
 
 	/**
-	*	Kernel Status and Memory Info Endpoint 
+	*	Kernel Status and Memory Info Endpoint
 	*	(Docs: https://github.com/appleboy/gin-status-api)
-	*/
+	 */
 	// get basic auth credentials from .env file like APP_STAT_AUTH=admin:password
 	auth := os.Getenv("APP_STAT_AUTH")
 	var statUsername string
 	var statPassword string
 	if auth != "" {
-		authUser := strings.Split(auth,":")
+		authUser := strings.Split(auth, ":")
 		statUsername = authUser[0]
 		statPassword = authUser[1]
 		// if no username or password exit
@@ -272,50 +247,87 @@ func main() {
 		}
 	}
 
-
 	/**
 	*	ALL APP ENDPOINTS
-	*/
+	 */
 	// create memory store for caching (Look to /cache_health)
 	store := persistence.NewInMemoryStore(time.Second)
 
 	docs.SwaggerInfo.BasePath = "/v1"
 	version := r.Group("/v1")
 	{
-		service := version.Group("/post")
+		/**
+		*	--------------- HEALTH ROUTES ---------------
+		 */
+		status := version.Group("/_")
+		{
+			// if mode is production disable swagger
+			status.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
+
+			status.GET("/app_kernel_stats", AppKernelStatsHandler)
+
+			/**
+			 *	Caching Example (Docs: https://github.com/gin-contrib/cache)
+			 */
+			status.GET("/health", gin.BasicAuth(gin.Accounts{statUsername: statPassword}), AppHealthCheckHandler)
+			status.GET("/cache_health", cache.CachePage(store, time.Minute, AppHealthCheckHandler))
+		}
+
+		auth_service := version.Group("/auth")
 		{
 			/**
 			*	--------------- APP ROUTES ---------------
-			*/
-			service.GET("/", GetPostsHandler)
-			service.POST("/", CreatePostHandler)
+			 */
+			auth_service.GET("/", GetPostsHandler)
+			auth_service.POST("/", CreatePostHandler)
 			//service.GET("/:id", GetPostByIdHandler)
+		}
 
+		user_service := version.Group("/user")
+		{
 			/**
-			*	--------------- HEALTH ROUTES ---------------
-			*/
-			status := service.Group("/_") 
-			{
-				// if mode is production disable swagger
-				status.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
+			*	--------------- APP ROUTES ---------------
+			 */
+			user_service.GET("/", GetPostsHandler)
+			user_service.POST("/", CreatePostHandler)
+			//service.GET("/:id", GetPostByIdHandler)
+		}
 
-				status.GET("/app_kernel_stats", AppKernelStatsHandler)
+		post_service := version.Group("/post")
+		{
+			/**
+			*	--------------- APP ROUTES ---------------
+			 */
+			post_service.GET("/", GetPostsHandler)
+			post_service.POST("/", CreatePostHandler)
+			//service.GET("/:id", GetPostByIdHandler)
+		}
 
-				/**
-				*	Caching Example (Docs: https://github.com/gin-contrib/cache)
-				*/
-				status.GET("/health", gin.BasicAuth(gin.Accounts{ statUsername : statPassword }) ,AppHealthCheckHandler)
-				status.GET("/cache_health", cache.CachePage(store, time.Minute,AppHealthCheckHandler))
-			}
-		}			
+		like_service := version.Group("/like")
+		{
+			/**
+			*	--------------- APP ROUTES ---------------
+			 */
+			like_service.GET("/", GetPostsHandler)
+			like_service.POST("/", CreatePostHandler)
+			//service.GET("/:id", GetPostByIdHandler)
+		}
+
+		tag_service := version.Group("/tag")
+		{
+			/**
+			*	--------------- APP ROUTES ---------------
+			 */
+			tag_service.GET("/", GetPostsHandler)
+			tag_service.POST("/", CreatePostHandler)
+			//service.GET("/:id", GetPostByIdHandler)
+		}
 	}
-
-
 
 	// get app port
 	APP_PORT := os.Getenv("APP_PORT")
 	if APP_PORT == "" {
-		APP_PORT = "9090"
+		APP_PORT = "8086"
 	}
 	// start server
 	if err := r.Run(":" + APP_PORT); err != nil {
@@ -323,37 +335,35 @@ func main() {
 	}
 }
 
-
 // AppHealtCheckHandler godoc
 // @Summary Returns container kernel info
-// @Schemes 
+// @Schemes
 // @Description Returns container kernel info
-// @Tags post-service-health
+// @Tags app-service-health
 // @Security BasicAuth
 // @Accept */*
 // @Produce json
 // @Success 200 {object} object
-// @Router /post/_/app_kernel_stats [get]
+// @Router /_/app_kernel_stats [get]
 func AppKernelStatsHandler(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, osstatus.GetStats())
 }
 
-
 // AppHealtCheckHandler godoc
 // @Summary is a simple health check endpoint
-// @Schemes 
+// @Schemes
 // @Description Checks if app is running and returns container info
-// @Tags post-service-health
+// @Tags app-service-health
 // @Security BasicAuth
 // @Accept */*
 // @Produce json
 // @Success 200 {object} object
-// @Router /post/_/health [get]
-// @Router /post/_/cache_health [get]
+// @Router /_/health [get]
+// @Router /_/cache_health [get]
 func AppHealthCheckHandler(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{
-		"status": true,
-		"uptime": time.Since(startTime).String(),
+		"status":  true,
+		"uptime":  time.Since(startTime).String(),
 		"version": appVersion,
 	})
 }
@@ -366,7 +376,7 @@ func AppHealthCheckHandler(ctx *gin.Context) {
 *	4 - Do your database operations
 *	5 - Emit event for notify other services for changes
 *	6 - Return response
-*/
+ */
 type CreatePostDto struct {
 	Body string `json:"body" validate:"required,min=1,max=255"`
 }
@@ -374,45 +384,43 @@ type CreatePostDto struct {
 /**
 *	CreatePostDtoValidator : Validate CreatePostDto
 *	Returns createPostDto,error
-*/
-func CreatePostDtoValidator(ctx *gin.Context) (CreatePostDto,error) {
+ */
+func CreatePostDtoValidator(ctx *gin.Context) (CreatePostDto, error) {
 	/*
-	// check user permission
-	userRole := "user" // TODO: get user role from context and jwt
-	canWatch, _ := userRole.Can("post", "create")
-	fmt.Printf("Can watch %s? %t\n", rating, canWatch)
+		// check user permission
+		userRole := "user" // TODO: get user role from context and jwt
+		canWatch, _ := userRole.Can("post", "create")
+		fmt.Printf("Can watch %s? %t\n", rating, canWatch)
 	*/
-    
+
 	var createPostDto CreatePostDto
 	// cast to json
-    if err := ctx.BindJSON(&createPostDto); err != nil {
-        ctx.JSON(http.StatusBadRequest, gin.H{
-			"status": false,
-			"type": "create-post/request-body",
-            "message": err.Error(),
-        })
+	if err := ctx.BindJSON(&createPostDto); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"status":  false,
+			"type":    "create-post/request-body",
+			"message": err.Error(),
+		})
 		// return error
-		return createPostDto,err
-    }
+		return createPostDto, err
+	}
 	// validate
 	validateDto := validator.New()
 	if err := validateDto.Struct(createPostDto); err != nil {
-        ctx.JSON(http.StatusBadRequest, gin.H{
-			"status": false,
-			"type": "create-post/validation",
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"status":  false,
+			"type":    "create-post/validation",
 			"message": err.Error(),
-        })
-		return createPostDto,err
-    }
+		})
+		return createPostDto, err
+	}
 	// return createPostDto
-	return createPostDto,nil
+	return createPostDto, nil
 }
-
-
 
 // CreatePostHandler godoc
 // @Summary Create Post by CreatePostDto
-// @Schemes 
+// @Schemes
 // @Description Create Post by CreatePostDto
 // @Tags post-service
 // @Security BearerAuth
@@ -426,9 +434,11 @@ func CreatePostDtoValidator(ctx *gin.Context) (CreatePostDto,error) {
 // @Router /post/ [post]
 func CreatePostHandler(ctx *gin.Context) {
 	// validate request
-	createPostDto,err := CreatePostDtoValidator(ctx)
-	if err != nil { return }		
-	
+	createPostDto, err := CreatePostDtoValidator(ctx)
+	if err != nil {
+		return
+	}
+
 	// create new product
 	post := Post{
 		Body: createPostDto.Body,
@@ -438,8 +448,8 @@ func CreatePostHandler(ctx *gin.Context) {
 	db.Create(&post)
 	if post.ID == 0 {
 		ctx.JSON(http.StatusUnprocessableEntity, gin.H{
-			"status": false,
-			"type": "create-post/save",
+			"status":  false,
+			"type":    "create-post/save",
 			"message": "Unprocessable inputs ensured.",
 		})
 		return
@@ -447,15 +457,13 @@ func CreatePostHandler(ctx *gin.Context) {
 
 	// fire event for notify other services for changes
 	// Simple Publisher
-	nc.Publish("post.created", []byte("Post Created Body: " + post.Body))
+	nc.Publish("post.created", []byte("Post Created Body: "+post.Body))
 
 	// return post
 	ctx.JSON(http.StatusOK, gin.H{
 		"post": post,
 	})
 }
-
-
 
 /**
 *	--------------- HTTP Get /post Section ---------------
@@ -464,14 +472,11 @@ func CreatePostHandler(ctx *gin.Context) {
 *	4 - Do your database operations
 *	5 - Emit event for notify other services for changes
 *	6 - Return response
-*/
-
-
-
+ */
 
 // GetPostsHandler godoc
 // @Summary Get Posts
-// @Schemes 
+// @Schemes
 // @Description Get Posts with limit and page
 // @Tags post-service
 // @Param limit query int false "limit"
@@ -487,13 +492,17 @@ func CreatePostHandler(ctx *gin.Context) {
 func GetPostsHandler(ctx *gin.Context) {
 	// get pagination params page should be 1<=page<100 and limit should be 1<=limit<50
 	limitQ := ctx.DefaultQuery("limit", "10")
-	if(limitQ == "" || limitQ < "1" || limitQ > "100") { limitQ = "10" } 
+	if limitQ == "" || limitQ < "1" || limitQ > "100" {
+		limitQ = "10"
+	}
 	pageQ := ctx.DefaultQuery("page", "1")
-	if(pageQ == "" || pageQ < "1" || pageQ > "100") { pageQ = "1" }
+	if pageQ == "" || pageQ < "1" || pageQ > "100" {
+		pageQ = "1"
+	}
 
 	// cast to int
-	limit,_ := strconv.Atoi(limitQ)
-	page,_ := strconv.Atoi(pageQ)
+	limit, _ := strconv.Atoi(limitQ)
+	page, _ := strconv.Atoi(pageQ)
 	offset := (page - 1) * limit
 
 	// get all posts by limit and offset
@@ -501,7 +510,7 @@ func GetPostsHandler(ctx *gin.Context) {
 	db.Limit(limit).Offset(offset).Find(&posts)
 
 	// fire event for notify other services for changes
-	nc.Publish("post.select", []byte("Post Got by ip: " + ctx.ClientIP()))
+	nc.Publish("post.select", []byte("Post Got by ip: "+ctx.ClientIP()))
 
 	// return posts
 	ctx.JSON(http.StatusOK, gin.H{
